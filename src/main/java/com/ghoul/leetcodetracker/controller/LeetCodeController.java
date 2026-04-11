@@ -1,5 +1,6 @@
 package com.ghoul.leetcodetracker.controller;
 
+import com.ghoul.leetcodetracker.model.dto.StatsResponse;
 import com.ghoul.leetcodetracker.service.LeetCodeService;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,7 +19,7 @@ public class LeetCodeController {
 
     @ResponseBody
     @PostMapping("/leet")
-    public String postStats(@RequestParam(required = true) String username) {
+    public StatsResponse postStats(@RequestParam(required = true) String username) {
         return leetCodeService.getStats(username);
     }
 

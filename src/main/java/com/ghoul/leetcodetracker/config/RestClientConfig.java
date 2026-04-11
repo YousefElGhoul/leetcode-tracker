@@ -22,6 +22,7 @@ public class RestClientConfig {
     private RestClient getRestClient(String baseUrl) {
         return RestClient.builder()
                 .baseUrl(baseUrl)
+                .defaultHeader("Content-Type", "application/json")
                 .requestInterceptor((request, body, execution) -> {
                     System.out.println(">>> Method : " + request.getMethod());
                     System.out.println(">>> URL    : " + request.getURI());
