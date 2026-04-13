@@ -29,22 +29,20 @@ public class HeatmapService {
      */
     public void upsertActivity(String username, int currentTotal) {
         LocalDate today = LocalDate.now();
-
         Optional<Heatmap> lastRecord = heatmapRepo
                 .findFirstByUsernameAndDateBeforeOrderByDateDesc(username, today);
-
         Heatmap record = heatmapRepo
                 .findByUsernameAndDate(username, today)
                 .orElseGet(Heatmap::new);
 
+        // lastRecord.isPresent() is there for the first time ever: just establish the baseline, don't credit solved
+        boolean solved = lastRecord.isPresent() && currentTotal > lastRecord.get().getTotalSolved();
+
         record.setUsername(username);
         record.setDate(today);
-        record.setVisited(true);
+        record.setSolved(solved);
+        record.setVisited(solved || record.isVisited());
         record.setTotalSolved(currentTotal);
-
-        // first time ever: just establish the baseline, don't credit solved
-        record.setSolved(lastRecord.isPresent() && currentTotal > lastRecord.get().getTotalSolved());
-
         heatmapRepo.save(record);
     }
 
