@@ -30,7 +30,7 @@ public class LeetCodeController {
     @PostMapping("/visit")
     public ResponseEntity<Void> recordVisit(@RequestParam(required = true) String username) {
         heatmapService.recordVisit(username);
-        return null;
+        return ResponseEntity.ok().build();
     }
 
     @ResponseBody
