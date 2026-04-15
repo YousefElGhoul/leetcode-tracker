@@ -5,6 +5,7 @@ import com.ghoul.leetcodetracker.model.entities.Heatmap;
 import com.ghoul.leetcodetracker.repositories.HeatmapRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -77,6 +78,7 @@ public class HeatmapService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional
     public void clearHeatmap(String username) {
         heatmapRepo.deleteByUsername(username);
     }
