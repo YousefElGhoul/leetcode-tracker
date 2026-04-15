@@ -31,6 +31,13 @@ public class LeetCodeController {
     }
 
     @ResponseBody
+    @DeleteMapping("/clear")
+    public ResponseEntity<Void> clearHeatmap(@RequestParam(required = true) String username) {
+        heatmapService.clearHeatmap(username);
+        return ResponseEntity.ok().build();
+    }
+
+    @ResponseBody
     @GetMapping("/")
     public String test() {
         return "This is a test";

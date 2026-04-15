@@ -76,4 +76,8 @@ public class HeatmapService {
                 .map(HeatmapRecord::from)
                 .collect(Collectors.toList());
     }
+
+    public void clearHeatmap(String username) {
+        heatmapRepo.deleteByUsername(username);
+    }
 }

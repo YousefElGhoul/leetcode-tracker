@@ -20,4 +20,6 @@ public interface HeatmapRepo extends JpaRepository<Heatmap, Long> {
             LocalDate from,
             LocalDate to
     );
+
+    void deleteByUsername(String username);
 }
