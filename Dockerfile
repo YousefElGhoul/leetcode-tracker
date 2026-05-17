@@ -6,7 +6,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine AS runtime
-RUN groupadd -g 1000 spring && useradd -u 1000 -g spring -s /bin/sh -m spring
+RUN addgroup -g 1000 spring && adduser -u 1000 -G spring -s /bin/sh -D spring
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 RUN chown -R spring:spring /app
