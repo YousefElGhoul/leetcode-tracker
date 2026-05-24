@@ -70,9 +70,7 @@ jobs:
           service: ${{ secrets.CLOUD_RUN_SERVICE_NAME }}
           region: ${{ secrets.GCP_REGION }}
           image: ${{ env.IMAGE }}
-          port: 8080
-          no-allow-unauthenticated: false
-          memory: 768Mi
+          flags: --allow-unauthenticated --port=8080 --memory=768Mi
           env_vars: |
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}
