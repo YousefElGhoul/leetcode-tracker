@@ -71,6 +71,7 @@ jobs:
           region: ${{ secrets.GCP_REGION }}
           image: ${{ env.IMAGE }}
           flags: --allow-unauthenticated --port=8080
+          memory: 768Mi
           env_vars: |
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}
