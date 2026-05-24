@@ -1,0 +1,78 @@
+# Required GitHub Secrets
+# ─────────────────────────────────────────────────────────────
+# GCP Authentication:
+#   WIF_PROVIDER          — Workload Identity Federation provider resource name
+#   WIF_SERVICE_ACCOUNT   — Workload Identity Federation service account email
+#   GCP_PROJECT_ID        — Google Cloud project ID
+#
+# Artifact Registry:
+#   GAR_REPOSITORY        — Artifact Registry repository name (not full path)
+#
+# Cloud Run:
+#   CLOUD_RUN_SERVICE_NAME — Cloud Run service name
+#   GCP_REGION             — GCP region (e.g., us-central1)
+#
+# Application Secrets (add each to the env_vars block below):
+#   JWT_SECRET             — Base64-encoded secret key for signing JWT tokens
+#   DATASOURCE_URL         — PostgreSQL connection URL
+#   DB_USERNAME            — Database username
+#   DB_PASSWORD            — Database password
+# ─────────────────────────────────────────────────────────────
+
+name: Build and Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GAR_REPOSITORY: ${{ secrets.GAR_REPOSITORY }}
+  IMAGE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPOSITORY }}/${{ secrets.CLOUD_RUN_SERVICE_NAME }}:${{ github.sha }}
+
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker \
+            ${{ secrets.GCP_REGION }}-docker.pkg.dev \
+            --quiet
+
+      - name: Build and push Docker image
+        run: |
+          docker build \
+            -t ${{ env.IMAGE }} \
+            .
+          docker push \
+            ${{ env.IMAGE }}
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ secrets.CLOUD_RUN_SERVICE_NAME }}
+          region: ${{ secrets.GCP_REGION }}
+          image: ${{ env.IMAGE }}
+          flags: --allow-unauthenticated --port=8080
+          env_vars: |
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
