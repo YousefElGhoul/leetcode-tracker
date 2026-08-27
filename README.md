@@ -211,11 +211,27 @@ Example tracker response:
 
 ## CI/CD and Deployment
 
-GitHub Actions runs `./mvnw verify` on pull requests and pushes to `main`. Only a successful `main` verification allows the workflow to authenticate with Google Cloud through Workload Identity Federation, build and push a commit-SHA-tagged image to Artifact Registry, and request a Cloud Run deployment.
+GitHub Actions runs `./mvnw verify` on pull requests and pushes to `main`. Only a successful `main` verification allows the workflow to build and push `docker.io/<Docker Hub username>/leetcode-tracker:<commit SHA>`, authenticate with Google Cloud through Workload Identity Federation, and request a Cloud Run deployment. The Docker Hub repository must be public so Cloud Run can pull the image directly.
+
+Required GitHub Actions secrets:
+
+| Secret | Purpose |
+|---|---|
+| `GCP_PROJECT_ID` | Google Cloud project containing the Cloud Run service |
+| `GCP_REGION` | Existing Cloud Run service region |
+| `DOCKERHUB_USERNAME` | Docker Hub account that owns the public `leetcode-tracker` repository |
+| `DOCKERHUB_TOKEN` | Docker Hub access token used to push images; do not use an account password |
+| `CLOUD_RUN_SERVICE_NAME` | Existing Cloud Run service name |
+| `WIF_PROVIDER` | Workload Identity Federation provider resource name |
+| `WIF_SERVICE_ACCOUNT` | Google service account used by GitHub OIDC |
+| `JWT_SECRET` | Base64-encoded application JWT signing key |
+| `DATASOURCE_URL` | Production PostgreSQL JDBC URL |
+| `DB_USERNAME` | Production database username |
+| `DB_PASSWORD` | Production database password |
 
 Deployment is configuration-ready, not claimed as universally verified. Repository owners must provision and configure:
 
-- A GCP project, Artifact Registry repository, Cloud Run service, and reachable PostgreSQL instance
+- A public Docker Hub repository named `leetcode-tracker`, an existing Cloud Run service, and a reachable PostgreSQL instance
 - GitHub OIDC Workload Identity Federation and least-privileged service-account IAM
 - GitHub secrets listed at the top of `.github/workflows/deploy-cloud-run.yml`
 - Database network access, TLS requirements, backups, and migration rehearsal
