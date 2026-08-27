@@ -9,9 +9,9 @@ import java.time.LocalDate;
         name = "heatmap",
         uniqueConstraints = @UniqueConstraint(columnNames = {"username", "date"})
 )
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class Heatmap {
 
     @Id
@@ -30,6 +30,5 @@ public class Heatmap {
     @Column(nullable = false)
     private boolean solved = false;
 
-    @Column(nullable = false)
-    private int totalSolved = 0;
+    private Integer totalSolved;
 }

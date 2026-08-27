@@ -3,6 +3,8 @@ package com.ghoul.leetcodetracker.service;
 import com.ghoul.leetcodetracker.client.LeetCodeClient;
 import com.ghoul.leetcodetracker.model.dto.StatsResponse;
 import com.ghoul.leetcodetracker.model.external.LeetCodeResponse;
+import com.ghoul.leetcodetracker.exception.LeetCodeUserNotFoundException;
+import com.ghoul.leetcodetracker.exception.UpstreamServiceException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -37,6 +39,21 @@ public class LeetCodeService {
 
         LeetCodeResponse response = leetCodeClient.getStats(username);
 
+        if (response == null || response.data() == null) {
+            throw new UpstreamServiceException("LeetCode returned a malformed response");
+        }
+        if (response.errors() != null && !response.errors().isEmpty()) {
+            throw new UpstreamServiceException("LeetCode rejected the statistics request");
+        }
+        if (response.data().matchedUser() == null) {
+            throw new LeetCodeUserNotFoundException();
+        }
+        if (response.data().matchedUser().submitStatsGlobal() == null
+                || response.data().matchedUser().submitStatsGlobal().acSubmissionNum() == null
+                || response.data().allQuestionsCount() == null) {
+            throw new UpstreamServiceException("LeetCode returned a malformed response");
+        }
+
         List<LeetCodeResponse.SubmissionCount> submissions = response.data()
                 .matchedUser()
                 .submitStatsGlobal()
@@ -50,7 +67,9 @@ public class LeetCodeService {
                 .findFirst()
                 .orElse(0);
 
-        StatsResponse stats = new StatsResponse(
+        heatmapService.upsertActivity(username, currentTotal);
+
+        return new StatsResponse(
                 new StatsResponse.Progress(
                         buildDifficulty("All", submissions, totals),
                         buildDifficulty("Easy", submissions, totals),
@@ -60,10 +79,6 @@ public class LeetCodeService {
                 heatmapService.getHeatmap(username, TODAY.withDayOfMonth(1), TODAY)
         );
 
-        // Side effect: records today's activity for the heatmap
-        heatmapService.upsertActivity(username, currentTotal);
-
-        return stats;
     }
 
     /**

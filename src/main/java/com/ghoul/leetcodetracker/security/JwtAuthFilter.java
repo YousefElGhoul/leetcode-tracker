@@ -1,6 +1,8 @@
 package com.ghoul.leetcodetracker.security;
 
 import com.ghoul.leetcodetracker.service.AuthService;
+import com.ghoul.leetcodetracker.exception.ApiErrorWriter;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -10,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -19,15 +22,16 @@ import java.io.IOException;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final AuthService authService;
+    private final ApiErrorWriter apiErrorWriter;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain
     ) throws ServletException, IOException {
-        try {
-            String token = getToken(request);
-            if (token != null) {
+        String token = getToken(request);
+        if (token != null) {
+            try {
                 UserDetails userDetails = authService.validateToken(token);
                 UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                         userDetails,
@@ -40,9 +44,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 if (userDetails instanceof TrackerUserDetails) {
                     request.setAttribute("userId", ((TrackerUserDetails) userDetails).getId());
                 }
+            } catch (JwtException | IllegalArgumentException | UsernameNotFoundException exception) {
+                SecurityContextHolder.clearContext();
+                log.debug("Rejected bearer token: {}", exception.getClass().getSimpleName());
+                apiErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED,
+                        "Unauthorized", "Bearer token is invalid or expired", request.getRequestURI());
+                return;
             }
-        } catch (Exception e) {
-            log.warn("Received invalid auth token");
         }
         filterChain.doFilter(request, response);
     }

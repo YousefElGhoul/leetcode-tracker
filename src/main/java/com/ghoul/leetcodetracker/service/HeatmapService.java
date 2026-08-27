@@ -28,22 +28,22 @@ public class HeatmapService {
        @param username     the LeetCode username to track
        @param currentTotal the current total number of problems solved fetched from LeetCode
      */
+    @Transactional
     public void upsertActivity(String username, int currentTotal) {
         LocalDate today = LocalDate.now();
-        Optional<Heatmap> lastRecord = heatmapRepo
-                .findFirstByUsernameAndDateBeforeOrderByDateDesc(username, today);
-        Heatmap record = heatmapRepo
-                .findByUsernameAndDate(username, today)
-                .orElseGet(Heatmap::new);
-
-        // lastRecord.isPresent() is there for the first time ever: just establish the baseline, don't credit solved
-        boolean solved = lastRecord.isPresent() && currentTotal > lastRecord.get().getTotalSolved();
+        Optional<Heatmap> todayRecord = heatmapRepo.findByUsernameAndDate(username, today);
+        Optional<Integer> baseline = todayRecord.map(Heatmap::getTotalSolved)
+                .or(() -> heatmapRepo
+                        .findFirstByUsernameAndDateBeforeAndTotalSolvedIsNotNullOrderByDateDesc(username, today)
+                        .map(Heatmap::getTotalSolved));
+        Heatmap record = todayRecord.orElseGet(Heatmap::new);
+        boolean solved = record.isSolved() || baseline.filter(total -> currentTotal > total).isPresent();
 
         record.setUsername(username);
         record.setDate(today);
         record.setSolved(solved);
-        record.setVisited(solved || record.isVisited());
-        record.setTotalSolved(currentTotal);
+        record.setVisited(true);
+        record.setTotalSolved(Math.max(currentTotal, baseline.orElse(currentTotal)));
         heatmapRepo.save(record);
     }
 
@@ -54,6 +54,7 @@ public class HeatmapService {
      *
      * @param username the LeetCode username to track
      */
+    @Transactional
     public void recordVisit(String username) {
         LocalDate today = LocalDate.now();
 

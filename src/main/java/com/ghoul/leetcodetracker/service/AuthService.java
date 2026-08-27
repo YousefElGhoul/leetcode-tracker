@@ -1,10 +1,10 @@
 package com.ghoul.leetcodetracker.service;
 
 import com.ghoul.leetcodetracker.model.entities.User;
+import com.ghoul.leetcodetracker.exception.DuplicateUsernameException;
 import com.ghoul.leetcodetracker.repositories.UserRepo;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,7 +15,8 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
@@ -33,7 +34,8 @@ public class AuthService {
     @Value("${jwt.secret}")
     private String secretKey;
 
-    private final Long jwtExpiryMs = 86400000L;
+    @Value("${jwt.expiry}")
+    private Duration jwtExpiry;
 
     public UserDetails authenticate(String username, String password) {
         authenticationManager.authenticate(
@@ -49,11 +51,11 @@ public class AuthService {
         Map<String, Object> claims = new HashMap<>();
 
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(userDetails.getUsername())
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiryMs))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .claims(claims)
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + jwtExpiry.toMillis()))
+                .signWith(getSigningKey())
                 .compact();
     }
 
@@ -64,7 +66,7 @@ public class AuthService {
 
     public void register(String username, String password) {
         if (userRepo.findByUsername(username).isPresent()) {
-            throw new RuntimeException("Username already exists");
+            throw new DuplicateUsernameException();
         }
         User user = new User();
         user.setUsername(username);
@@ -74,14 +76,18 @@ public class AuthService {
 
     private String getUsernameFromToken(String token) {
         Claims claims = Jwts.parser()
-                .setSigningKey(getSigningKey())
+                .verifyWith(getSigningKey())
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
         return claims.getSubject();
     }
 
-    private Key getSigningKey() {
+    public long getExpirySeconds() {
+        return jwtExpiry.toSeconds();
+    }
+
+    private SecretKey getSigningKey() {
         byte[] keyBytes =  Base64.getDecoder().decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);
     }

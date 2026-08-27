@@ -1,187 +1,224 @@
 # LeetCode Tracker API
 
-A Spring Boot REST API that fetches and tracks LeetCode statistics for users, including problem-solving progress and daily activity. Uses JWT authentication to protect destructive operations.
+A production-minded Spring Boot API for retrieving LeetCode progress and building a persistent daily activity heatmap. It combines LeetCode's GraphQL statistics with local snapshots, account authentication, ownership-aware deletion, validated requests, and a stable JSON error contract.
 
-**Base URL:** `https://leetcode-tracker-api.yousefelghoul.me` (production) / `http://localhost:8080` (local)
+## Architecture
+
+```text
+HTTP client
+  -> Spring MVC controllers + Bean Validation
+  -> JWT security filter / authenticated principal
+  -> authentication, tracker, and heatmap services
+  -> PostgreSQL via Spring Data JPA
+  -> LeetCode GraphQL via a timeout-bounded RestClient
+```
+
+The application is stateless for authentication. PostgreSQL stores account password hashes and heatmap snapshots. Flyway owns schema creation/evolution; Hibernate validates mappings at startup and does not update production tables.
 
 ## Features
 
-- **LeetCode stats** — fetches solved/total counts broken down by difficulty (Easy, Medium, Hard, All) via the LeetCode GraphQL API
-- **Activity tracking** — records daily visits and detects when problems were solved by comparing against the previous snapshot
-- **Monthly heatmap** — builds a day-by-day timeline showing which days were visited and which had solved problems
-- **JWT authentication** — register and login to obtain a token; required for destructive operations
-- **PostgreSQL persistence** — all heatmap records and user credentials stored in a PostgreSQL database
-- **OpenAPI documentation** — interactive Swagger UI for exploring and testing endpoints
+- Solved and available problem counts for All, Easy, Medium, and Hard
+- Current-month heatmap backed by persisted daily records
+- Same-day and cross-day solved-problem detection
+- JWT registration/login with BCrypt password hashes
+- Principal-derived deletion so request parameters cannot target another account
+- Request validation and consistent client-facing errors
+- Explicit handling for LeetCode timeouts, HTTP failures, GraphQL errors, unknown users, and malformed payloads
+- OpenAPI/Swagger documentation
+- Unit and MockMvc integration tests with no live LeetCode dependency
+- Multi-stage, non-root Docker image and test-gated Cloud Run workflow
 
-## Documentation
+## Snapshot Logic
 
-Interactive API documentation is available via Swagger UI:
+The first successful tracker request stores the current solved count as a baseline and does not infer historical activity. Later requests compare the new count with today's existing snapshot or, for a visit-only record, the latest prior non-null snapshot. An increase marks the day as solved and visited. Once detected, `solved=true` is preserved, and transient upstream count regressions do not lower the stored baseline.
 
-- **Production:** [https://leetcode-tracker-api.yousefelghoul.me/swagger-ui/index.html](https://leetcode-tracker-api.yousefelghoul.me/swagger-ui/index.html)
-- **Local:** [http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)
+`GET /tracker` writes today's snapshot before reading the heatmap, so the response includes the latest daily state. The heatmap contains persisted records from the first day of the current month through today; it does not synthesize rows for days that were never recorded.
 
-The OpenAPI 3 spec is also available at `/v3/api-docs`.
+## Tech Stack
+
+- Java 21, Spring Boot 4, Spring MVC, Spring Security
+- Spring Data JPA, Hibernate, PostgreSQL, Flyway
+- JJWT with HS256 signed bearer tokens
+- Spring `RestClient` for LeetCode GraphQL
+- Jakarta Bean Validation, Springdoc OpenAPI
+- JUnit 6, Mockito, MockMvc, H2 test database
+- Maven, Docker, GitHub Actions, Google Cloud Run configuration
 
 ## Endpoints
 
-All endpoints are prefixed with `/api/v1`.
+All application endpoints use the `/api/v1` prefix.
 
-### Public (no auth required)
+| Access | Method | Path | Behavior |
+|---|---|---|---|
+| Public | `POST` | `/api/v1/auth/register` | Create an account; returns `201` |
+| Public | `POST` | `/api/v1/auth/login` | Authenticate and return a JWT |
+| Public | `GET` | `/api/v1/tracker?username=alice` | Fetch stats and update today's snapshot |
+| Public | `POST` | `/api/v1/visit?username=alice` | Record a visit without fetching LeetCode |
+| Protected | `DELETE` | `/api/v1/clear` | Delete only the JWT subject's heatmap; returns `204` |
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/tracker?username=` | Fetch LeetCode stats and record activity |
-| POST | `/api/v1/visit?username=` | Record a visit without fetching stats |
-| GET | `/api/v1/test-header` | Health-check endpoint |
-| POST | `/api/v1/auth/register` | Create a new user account |
-| POST | `/api/v1/auth/login` | Authenticate and receive a JWT token |
+Swagger UI is available at `/swagger-ui/index.html`; the OpenAPI document is at `/v3/api-docs`.
 
-### Protected (JWT required)
+The tracker and visit endpoints intentionally remain public for the portfolio application's read-first frontend flow, although they persist activity. In a multi-tenant production product, rate limiting and authenticated profile ownership should be added before exposing these write paths broadly.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| DELETE | `/api/v1/clear?username=` | Clear heatmap data for a user |
+## Authentication
 
-To access protected endpoints, include the JWT token in the `Authorization` header:
+1. Register an application username matching the heatmap identity you own.
+2. Log in with the same credentials.
+3. Send `Authorization: Bearer <token>` to protected endpoints.
+
+Passwords are stored only as salted, delegating `{bcrypt}` hashes. JWT signatures and expiration are validated on every authenticated request. Missing, malformed, invalid, and expired tokens receive JSON `401` responses. The default lifetime is 24 hours and is configurable through `JWT_EXPIRY`.
+
+Deletion does not accept a username. The service always uses the authenticated JWT subject, preventing an authenticated caller from changing a parameter to clear another username's records. Registration establishes application-local ownership of that username; it does not cryptographically verify ownership of an external LeetCode profile.
+
+## Error Format
+
+MVC validation, authentication, authorization, conflicts, upstream failures, and unexpected errors use the same shape:
+
+```json
+{
+  "timestamp": "2026-08-27T12:00:00Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Request validation failed",
+  "path": "/api/v1/auth/register",
+  "fieldErrors": {
+    "password": "Password must be between 8 and 72 characters"
+  }
+}
 ```
-Authorization: Bearer <your-token>
+
+Common statuses are `400` validation, `401` authentication, `403` authorization, `404` unknown LeetCode user, `409` duplicate registration, `502` LeetCode failure/malformed response, and `500` unexpected server failure. Logs contain request paths and failure categories but never request passwords, bearer tokens, database credentials, or secret values.
+
+## Local Setup
+
+Requirements: Java 21, PostgreSQL, and Docker optionally.
+
+1. Create a PostgreSQL database and user.
+2. Export the required configuration:
+
+```bash
+export JWT_SECRET="$(openssl rand -base64 64)"
+export DATASOURCE_URL="jdbc:postgresql://127.0.0.1:5432/leetcode"
+export DB_USERNAME="leetcode"
+export DB_PASSWORD="your-local-password"
 ```
 
-### `GET /api/v1/tracker?username=`
+3. Start the API:
 
-Fetches LeetCode stats for the given username and records a visit. The first time a user is tracked, a baseline is established with no solved problems credited (no prior snapshot to compare against).
+```bash
+./mvnw spring-boot:run
+```
 
-**Response `200 OK`**
+The local base URL is `http://localhost:8080`.
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---:|---|---|
+| `JWT_SECRET` | Yes | None | Base64-encoded HS256 key, at least 32 decoded bytes |
+| `JWT_EXPIRY` | No | `PT24H` | ISO-8601 token lifetime |
+| `DATASOURCE_URL` | No | `jdbc:postgresql://127.0.0.1:5432/leetcode` | PostgreSQL JDBC URL |
+| `DB_USERNAME` | No | `postgres` | Database login |
+| `DB_PASSWORD` | Yes | None | Database password |
+| `PORT` | No | `8080` | Container HTTP port |
+| `LEETCODE_GRAPHQL_BASE_URL` | No | `https://leetcode.com/graphql` | Upstream endpoint override |
+| `LEETCODE_GRAPHQL_CONNECT_TIMEOUT` | No | `2s` | Upstream connection timeout |
+| `LEETCODE_GRAPHQL_READ_TIMEOUT` | No | `5s` | Upstream response timeout |
+| `CORS_ALLOWED_ORIGINS` | No | Project frontend origin | Comma-separated exact origins |
+| `CORS_ALLOWED_ORIGIN_PATTERNS` | No | Local/project patterns | Comma-separated origin patterns |
+
+Never commit `.env`, JWT keys, database passwords, tokens, or cloud credentials.
+
+## Database Migrations
+
+Flyway executes SQL from `src/main/resources/db/migration`. `V1__create_tracker_schema.sql` creates fresh `users` and `heatmap` tables, widens password storage for future hash formats, and permits a null solve count for visit-only snapshots. The migration contains no row deletion or table drop.
+
+For a fresh database, start the application and Flyway applies V1 automatically. Hibernate then validates the resulting schema with `ddl-auto=validate`.
+
+For an existing database previously managed by Hibernate `ddl-auto=update`:
+
+1. Back up the database and inspect its columns, constraints, and indexes.
+2. Rehearse startup against a copy.
+3. Flyway's configured baseline version `0` adopts the non-empty schema, then V1 runs its idempotent creation and non-destructive column adjustments.
+4. Confirm the `flyway_schema_history` row and application startup before production rollout.
+
+Do not point a new build at production without this backup/rehearsal. Constraint names generated by older Hibernate versions can differ even when the effective schema is compatible.
+
+## Tests
+
+Tests use an in-memory H2 database and mocked HTTP interactions; they require neither PostgreSQL nor LeetCode credentials.
+
+```bash
+./mvnw test
+./mvnw verify
+```
+
+Coverage includes snapshot/activity behavior, password hashing and duplicate users, stats mapping and malformed upstream data, GraphQL variable transport, registration/login, validation, unauthorized and invalid-token responses, and JWT-subject ownership during deletion.
+
+## Docker
+
+Create local environment values from the documented template:
+
+```bash
+cp .env.example .env
+# Replace both placeholder secrets in .env
+docker compose up --build
+```
+
+Compose starts PostgreSQL 16 and the API, waits for database health, and persists data in the `pgdata` volume. PostgreSQL is bound to `127.0.0.1:5432`, not all host interfaces.
+
+To build only the application image:
+
+```bash
+docker build -t leetcode-tracker:local .
+```
+
+The Dockerfile uses Java 21 in both stages, installs dependencies separately for caching, copies no secrets into the image, and runs the application as the non-root `spring` user. Tests are skipped inside the image build because the CI workflow runs `mvn verify` as a required predecessor.
+
+## API Examples
+
+```bash
+curl -i http://localhost:8080/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"strong-password"}'
+
+curl -s http://localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"strong-password"}'
+
+curl -s 'http://localhost:8080/api/v1/tracker?username=alice'
+
+curl -i -X DELETE http://localhost:8080/api/v1/clear \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
+
+Example tracker response:
 
 ```json
 {
   "progress": {
-    "all":    { "solvedNum": 150, "totalNum": 3450 },
-    "easy":   { "solvedNum": 80,  "totalNum": 850 },
-    "medium": { "solvedNum": 55,  "totalNum": 1500 },
-    "hard":   { "solvedNum": 15,  "totalNum": 1100 }
+    "all": {"solvedNum": 150, "totalNum": 3450},
+    "easy": {"solvedNum": 80, "totalNum": 850},
+    "medium": {"solvedNum": 55, "totalNum": 1500},
+    "hard": {"solvedNum": 15, "totalNum": 1100}
   },
   "heatmap": [
-    { "date": "2026-05-01", "visited": true,  "solved": false },
-    { "date": "2026-05-02", "visited": false, "solved": false },
-    { "date": "2026-05-03", "visited": true,  "solved": true }
+    {"date": "2026-08-26", "visited": true, "solved": false},
+    {"date": "2026-08-27", "visited": true, "solved": true}
   ]
 }
 ```
 
-The `heatmap` array contains daily records for the tracked period, each with a `date`, `visited` flag, and `solved` flag.
+## CI/CD and Deployment
 
-### `POST /api/v1/visit?username=`
+GitHub Actions runs `./mvnw verify` on pull requests and pushes to `main`. Only a successful `main` verification allows the workflow to authenticate with Google Cloud through Workload Identity Federation, build and push a commit-SHA-tagged image to Artifact Registry, and request a Cloud Run deployment.
 
-Records a visit for the given username without fetching fresh LeetCode stats. Useful for tracking page views independently of API calls.
+Deployment is configuration-ready, not claimed as universally verified. Repository owners must provision and configure:
 
-**Response `200 OK`**
+- A GCP project, Artifact Registry repository, Cloud Run service, and reachable PostgreSQL instance
+- GitHub OIDC Workload Identity Federation and least-privileged service-account IAM
+- GitHub secrets listed at the top of `.github/workflows/deploy-cloud-run.yml`
+- Database network access, TLS requirements, backups, and migration rehearsal
+- Preferably Google Secret Manager references instead of long-lived application secrets in revision environment variables
 
-Empty body.
-
-### `GET /api/v1/test-header`
-
-Simple health-check endpoint.
-
-**Response `200 OK`**
-
-```
-<h1>This is a test</h1>
-```
-
-### `POST /api/v1/auth/register`
-
-Creates a new user account.
-
-**Request body**
-
-```json
-{
-  "username": "johndoe",
-  "password": "securepass123"
-}
-```
-
-**Response `200 OK`**
-
-Empty body.
-
-### `POST /api/v1/auth/login`
-
-Authenticates with your credentials and returns a JWT token.
-
-**Request body**
-
-```json
-{
-  "username": "johndoe",
-  "password": "securepass123"
-}
-```
-
-**Response `200 OK`**
-
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiJ9...",
-  "expiresIn": 86400,
-  "username": "johndoe"
-}
-```
-
-The token expires after 24 hours (`expiresIn` is in seconds).
-
-### `DELETE /api/v1/clear?username=`
-
-Clears all heatmap data for the given username. Requires JWT authentication.
-
-**Response `200 OK`**
-
-Empty body.
-
-## Authentication Flow
-
-1. **Register** — `POST /api/v1/auth/register` with `{"username": "...", "password": "..."}`
-2. **Login** — `POST /api/v1/auth/login` with the same credentials to receive a JWT token
-3. **Use** — Include the token in the `Authorization: Bearer <token>` header on protected requests
-
-Tokens expire after 24 hours.
-
-## Errors
-
-Error handling has not been implemented yet — this section is a placeholder for future work.
-
-| HTTP Status | Condition |
-|---|---|
-| `500 Internal Server Error` | Any unexpected error (default Spring Boot behaviour) |
-
-## Tech Stack
-
-- **Java 21** with **Spring Boot 4.0**
-- **Maven** build system
-- **PostgreSQL** database with **Hibernate JPA**
-- **Springdoc OpenAPI** for Swagger UI documentation
-- **JWT (jjwt)** for authentication
-- **Docker** multi-stage build (Alpine-based runtime image)
-- **Google Cloud Run** deployment via GitHub Actions
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `JWT_SECRET` | — | Base64-encoded secret key for signing JWT tokens |
-| `DATASOURCE_URL` | `jdbc:postgresql://127.0.0.1:5432/leetcode` | PostgreSQL connection URL |
-| `DB_USERNAME` | `postgres` | Database username |
-| `DB_PASSWORD` | `0000` | Database password |
-
-Generate a JWT secret:
-
-```bash
-openssl rand -base64 64
-```
-
-## Notes
-
-- The first time a username is tracked, a baseline is established without crediting any solved problems — there is no prior snapshot to compare against.
-- `DELETE /api/v1/clear?username=` requires authentication. All other endpoints are public.
-- Deployed on Google Cloud Run via GitHub Actions.
+Cloud Run is configured as publicly invokable because the stats endpoints are public; destructive data clearing remains protected by application JWT authentication.

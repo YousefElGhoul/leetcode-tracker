@@ -1,28 +1,26 @@
-# Stage 1: Build the application
 FROM maven:3.9-eclipse-temurin-21 AS build
 
 WORKDIR /app
 
-COPY pom.xml .
-RUN mvn dependency:go-offline -B
+COPY pom.xml mvnw ./
+COPY .mvn ./.mvn
+RUN ./mvnw --batch-mode dependency:go-offline
 
 COPY src ./src
-RUN mvn clean package -DskipTests
+RUN ./mvnw --batch-mode package -DskipTests
 
-# Stage 2: Runtime image
 FROM eclipse-temurin:21-jre-alpine
 
-RUN apk add --no-cache dumb-init
-RUN addgroup -g 1000 spring && adduser -u 1000 -G spring -s /bin/sh -D spring
+RUN apk add --no-cache dumb-init \
+    && addgroup -g 1000 spring \
+    && adduser -u 1000 -G spring -s /bin/sh -D spring
 
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
-RUN chown -R spring:spring /app
+COPY --chown=spring:spring --from=build /app/target/leetcode-tracker-0.0.1-SNAPSHOT.jar app.jar
 
 USER spring:spring
 
 ENV PORT=8080
-ENV SERVER_PORT=8080
 EXPOSE $PORT
 
 ENTRYPOINT ["dumb-init", "--"]

@@ -2,20 +2,18 @@ package com.ghoul.leetcodetracker.model.entities;
 
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
+import lombok.Setter;
 
 @Entity
 @Table(
         name = "users",
         uniqueConstraints = @UniqueConstraint(columnNames = {"username"})
 )
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class User {
 
     @Id
@@ -25,10 +23,7 @@ public class User {
     @Column(nullable = false, length = 50, unique = true)
     private String username;
 
-    @Column(nullable = false, length = 100)
+    @Column(nullable = false, length = 255)
     private String password;
-
-    @OneToMany(cascade = CascadeType.ALL, mappedBy = "username")
-    private List<Heatmap> heatmap;
 
 }

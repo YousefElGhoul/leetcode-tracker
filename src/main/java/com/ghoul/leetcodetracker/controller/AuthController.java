@@ -4,7 +4,9 @@ import com.ghoul.leetcodetracker.model.dto.AuthResponse;
 import com.ghoul.leetcodetracker.model.dto.LoginRequest;
 import com.ghoul.leetcodetracker.model.dto.RegisterRequest;
 import com.ghoul.leetcodetracker.service.AuthService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -16,9 +18,8 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @ResponseBody
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         UserDetails userDetails = authService.authenticate(
                 request.username(),
                 request.password()
@@ -28,7 +29,7 @@ public class AuthController {
 
         AuthResponse response = new AuthResponse(
                 tokenValue,
-                86400,
+                authService.getExpirySeconds(),
                 userDetails.getUsername()
         );
         
@@ -36,8 +37,8 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<Void> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
         authService.register(request.username(), request.password());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 }

@@ -13,7 +13,8 @@ public interface HeatmapRepo extends JpaRepository<Heatmap, Long> {
 
     Optional<Heatmap> findByUsernameAndDate(String username, LocalDate date);
 
-    Optional<Heatmap> findFirstByUsernameAndDateBeforeOrderByDateDesc(String username, LocalDate date);
+    Optional<Heatmap> findFirstByUsernameAndDateBeforeAndTotalSolvedIsNotNullOrderByDateDesc(
+            String username, LocalDate date);
 
     List<Heatmap> findByUsernameAndDateBetweenOrderByDateAsc(
             String username,

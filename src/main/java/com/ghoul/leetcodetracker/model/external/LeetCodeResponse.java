@@ -2,7 +2,7 @@ package com.ghoul.leetcodetracker.model.external;
 
 import java.util.List;
 
-public record LeetCodeResponse(Data data) {
+public record LeetCodeResponse(Data data, List<GraphQlError> errors) {
 
     public record Data(
             MatchedUser matchedUser,
@@ -16,4 +16,6 @@ public record LeetCodeResponse(Data data) {
     public record SubmissionCount(String difficulty, int count) {}
 
     public record QuestionCount(String difficulty, int count) {}
+
+    public record GraphQlError(String message) {}
 }
