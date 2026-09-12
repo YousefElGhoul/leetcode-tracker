@@ -1,3 +1,36 @@
+<!--
+---
+portfolio:
+  title: "LeetCode Tracker API"
+  subtitle: "Persistent Coding Activity & Progress Backend"
+  type: 
+    - Backend
+  status: "Maintained"
+  time: "2026"
+
+  description: "A Spring Boot backend that combines live LeetCode statistics with persistent daily activity tracking, account authentication, ownership-aware operations, and a PostgreSQL-backed heatmap for my personal coding dashboard."
+
+  skills:
+    - Java
+    - Spring Boot
+    - Spring Security
+    - REST APIs
+    - JWT
+    - PostgreSQL
+    - Spring Data JPA
+    - Hibernate
+    - Flyway
+    - Docker
+    - JUnit
+    - GitHub Actions
+    - Google Cloud Run
+    - GraphQL
+
+  live: null
+  slug: "leetcode-tracker-api"
+---
+-->
+
 # LeetCode Tracker API
 
 A production-minded Spring Boot API for retrieving LeetCode progress and building a persistent daily activity heatmap. It combines LeetCode's GraphQL statistics with local snapshots, account authentication, ownership-aware deletion, validated requests, and a stable JSON error contract.
