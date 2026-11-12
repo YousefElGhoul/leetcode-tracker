@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>LeetCode Tracker</title>
+    <script src="https://kit.fontawesome.com/ca7138c89a.js" crossorigin="anonymous"></script>
+    <script src="time.js"></script>
+    <script src="auth.js"></script>
+    <script src="username.js"></script>
+    <script src="api.js"></script>
+    <script src="heatmap.js"></script>
+    <script src="tracker.js"></script>
+    <link href="resources/favicon.png" rel="icon" type="image/x-icon"/>
+    <link href="global.css" rel="stylesheet"/>
+    <link href="style.css" rel="stylesheet"/>
+</head>
+<body>
+    <div class="container">
+        <nav class="header">
+            <a href="https://www.youtube.com/feed/subscriptions" target="_blank">
+                <i class="fa-brands fa-youtube"></i>
+            </a>
+            <a href="https://claude.ai/" target="_blank">
+                <i class="fa-brands fa-claude"></i>
+            </a>
+            <a href="https://github.com/" target="_blank">
+                <i class="fa-brands fa-github"></i>
+            </a>
+            <a href="https://www.linkedin.com/" target="_blank">
+                <i class="fa-brands fa-linkedin"></i>
+            </a>
+            <a href="https://drive.google.com/drive/u/1/my-drive" target="_blank">
+                <i class="fa-brands fa-google-drive"></i>
+            </a>
+            <a href="https://www.icloud.com/" target="_blank">
+                <i class="fas fa-cloud"></i>
+            </a>
+        </nav>
+        <div class="top-container">
+            <div class="hello txt">
+                Welcome!
+            </div>
+
+            <div id="clock"></div>
+
+            <nav class="header">
+                <a href="../homepage" target="_self">
+                    <i class="fas fa-home"></i>
+                </a>
+            </nav>
+        </div>
+        <div id="login">
+            <div class="login-title txt" style="font-size: 1.6rem">
+                Login:
+            </div>
+            <input id="login-username-input" type="text" placeholder="Username..."/>
+            <input id="login-password-input" type="password" placeholder="Password"/>
+            <p class="empty-disclaimer" id="login-empty-disclaimer">
+                Empty Credentials
+            </p>
+            <button id="login-submit" type="button" onclick="handleUsernameLogin()">Login</button>
+            <p class="password-disclaimer">
+                This password is used for API authentication.
+                It does not have to be your LeetCode account password – in fact, we strongly discourage using it.
+            </p>
+            <hr class="solid">
+            <p class="register-text">
+                First time visit? Create an account!
+            </p>
+            <button id="change-to-signup" type="button" onclick="changeToSignUp()">Create an account</button>
+        </div>
+        <div id="register">
+            <div class="register-title txt" style="font-size: 1.6rem">
+                Create an Account:
+            </div>
+            <input id="register-username-input" type="text" placeholder="Username..."/>
+            <input id="register-password-input" type="password" placeholder="Password"/>
+            <p class="empty-disclaimer" id="register-empty-disclaimer">
+                Empty Credentials
+            </p>
+            <button id="register-submit" type="button" onclick="handleUsernameRegister()">Sign up</button>
+            <p class="password-disclaimer">
+                This password is used for API authentication.
+                It does not have to be your LeetCode account password – in fact, we strongly discourage using it.
+            </p>
+            <hr class="solid">
+            <p class="login-text">
+                Already have an account? Login!
+            </p>
+            <button id="change-to-login" type="button" onclick="changeToLogin()">Login</button>
+        </div>
+        <div class="middle-container" id="daily-tracker">
+            <div class="tracker txt" style="font-size: 1.6rem">
+                <i class="fa-brands fa-leetcode"></i>
+                <a href="https://leetcode.com/problemset/" id="leetcodeLink" onclick="recordVisit()">LeetCode</a>
+                Tracker
+            </div>
+            <div class="daily-tracker">
+                <div class="dailyTracker01"><span id="visitedStatus">LeetCode Visited</span></div>
+                <div class="dailyTracker02"><span id="solvedStatus">Problem Solved</span></div>
+                <div class="dailyTracker03"><span> → </span></div>
+                <div class="dailyTracker04"><span> → </span></div>
+                <div class="dailyTracker05"><i id="visitedIconCheck" class="fa fa-spinner fa-spin"></i></div>
+                <div class="dailyTracker06"><i id="solvedIconCheck" class="fa fa-spinner fa-spin"></i></div>
+            </div>
+            <div class="options">
+                <a class="tracker txt" id="changeUsernameButton" href="#" onclick="logout()" title="Logout">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </a>
+                <a class="tracker txt" id="clearHeatmapButton" href="#" onclick="clearHeatmap()" title="Clears the heatmap">
+                    <i class="fa-solid fa-trash-can"></i>
+                </a>
+            </div>
+        </div>
+        <div class="bottom-container" id="stats-container">
+            <div class="tracker-left">
+                <div class="leftDiv01 total-solved"><span>Total Solved</span></div>
+                <div class="leftDiv02 difficulties"><span>Easy</span></div>
+                <div class="leftDiv03 difficulties"><span>Medium</span></div>
+                <div class="leftDiv04 difficulties"><span>Hard</span></div>
+                <div class="leftDiv05 total-solved"><span class="colon"> : </span></div>
+                <div class="leftDiv06 difficulties"><span class="colon"> : </span></div>
+                <div class="leftDiv07 difficulties"><span class="colon"> : </span></div>
+                <div class="leftDiv08 difficulties"><span class="colon"> : </span></div>
+                <div class="leftDiv09 total-solved tracker-number"><span id="totalSolved"></span></div>
+                <div class="leftDiv10 difficulties tracker-number"><span id="easySolved"></span></div>
+                <div class="leftDiv11 difficulties tracker-number"><span id="mediumSolved"></span></div>
+                <div class="leftDiv12 difficulties tracker-number"><span id="hardSolved"></span></div>
+                <div class="leftDiv13 total-solved"><span id="slash1" class="slash"> <i class="fa fa-spinner fa-spin"></i> </span></div>
+                <div class="leftDiv14 difficulties"><span id="slash2" class="slash"> <i class="fa fa-spinner fa-spin"></i> </span></div>
+                <div class="leftDiv15 difficulties"><span id="slash3" class="slash"> <i class="fa fa-spinner fa-spin"></i> </span></div>
+                <div class="leftDiv16 difficulties"><span id="slash4" class="slash"> <i class="fa fa-spinner fa-spin"></i> </span></div>
+                <div class="leftDiv17 total-solved tracker-number"><span id="totalProblems"></span></div>
+                <div class="leftDiv18 difficulties tracker-number"><span id="totalEasy" ></span></div>
+                <div class="leftDiv19 difficulties tracker-number"><span id="totalMedium" ></span></div>
+                <div class="leftDiv20 difficulties tracker-number"><span id="totalHard" ></span></div>
+                <div class="progress-wrapper">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+            </div>
+            <div class="tracker-right">
+                <span id="calendarMonthTitle">Activity – <i id="loader" class="fa fa-spinner fa-spin"></i></span>
+                <div id="calendarWeekdays"></div>   
+                <div id="calendarHeatmap">
+                    <i id="calendarLoader" class="fa fa-spinner fa-spin"></i>
+                </div>
+                <div class="calendar-legend">
+                    <span><span class="legend-box legend-solved"></span> Solved</span>
+                    <span><span class="legend-box legend-visited"></span> Visited</span>
+                    <span><span class="legend-box legend-none"></span> No Activity</span>
+                </div>                  
+            </div>              
+        </div>
+        <div class="footer">
+            <a href="https://github.com/YousefElGhoul/leetcode-tracker">
+                <i class="fa-brands fab fa-github"></i>
+                Repo
+            </a>
+            <a href="https://leetcode-tracker-api.yousefelghoul.me/swagger-ui/index.html">
+                <i class="fa-solid fa-gear"></i>
+                API
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // On load
+        window.onload = () => {
+            updateClock();
+            updateLeetCodeStats();
+        }
+    </script>
+</body>
+</html>

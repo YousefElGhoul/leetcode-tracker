@@ -1,0 +1,132 @@
+/* Fonts */
+@import url('https://fonts.googleapis.com/css?family=Roboto+Mono');
+@import url('https://fonts.googleapis.com/css?family=Roboto');
+@import url('https://fonts.googleapis.com/css?family=Anton');
+
+/* Global Styles */
+body {
+    background-color: #24273a;
+    margin: 0;
+}
+
+/* Text Styles */
+.txt {
+    font-family: "Roboto", serif;
+    font-weight: 600;
+    color: #f3f4f5;
+    margin: 0 0 .35em 0;
+    text-align: center;
+}
+
+/* Font Sizes */
+.title,
+.weather {
+    font-size: 1.2rem;
+    text-decoration: none;
+}
+
+.weather:hover {
+    color: #c2c3c4;
+}
+
+.hello {
+    font-size: 1.6rem;
+}
+
+/* Custom Icons */
+.icon {
+    width: 1em;
+    height: 1em;
+    display: inline-block;
+    background-size: cover;
+}
+.link {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+/* Big Container Style */
+.container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+/* Most Used Header Links */
+.header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    color: #f3f4f5;
+    font-size: 1.6rem;
+    margin: 1rem;
+}
+.header a{
+    text-decoration: none;
+    color:  #f3f4f5;
+    margin-left: 1.5rem;
+    margin-right: 1.5rem;
+}
+.header a:hover{
+    color: #c2c3c4;
+}
+
+/* Clock */
+#clock {
+    font-size: 4.0rem;
+    font-family: "Anton", serif;
+    color:  #f3f4f5;
+}
+
+/* Weather */
+.weather {
+    display: flex;
+    flex-direction: row;
+}
+
+/* Common Container */
+
+.top-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    width: 70%;
+    margin: 1em 0;
+}
+
+
+/* Repo Link on mobile*/
+.footer {
+    text-align: center;
+    padding: 0.5rem;
+    width: 100%;
+}
+.footer a {
+    text-decoration: none;
+    font-family: "Roboto", serif;
+    color: #c2c3c4;
+    display: block;
+}
+.footer a:hover {
+    color: #f3f4f5;
+}
+
+/* Repo Link on desktop */
+@media only screen and (min-width: 960px) {
+    .footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+    }
+}
+
+@media only screen and (max-width: 960px) {
+    .container {
+        height: auto;
+    }
+}
