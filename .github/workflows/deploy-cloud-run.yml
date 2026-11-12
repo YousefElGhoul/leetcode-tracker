@@ -1,44 +1,41 @@
-# Required GitHub Secrets
-# ─────────────────────────────────────────────────────────────
-# GCP Authentication:
-#   WIF_PROVIDER          — Workload Identity Federation provider resource name
-#   WIF_SERVICE_ACCOUNT   — Workload Identity Federation service account email
-#   GCP_PROJECT_ID        — Google Cloud project ID
+# Required GitHub Secrets (all must be created in the repo or organisation):
 #
-# Docker Hub:
-#   DOCKERHUB_USERNAME    — Docker Hub account name
-#   DOCKERHUB_TOKEN       — Docker Hub access token (not an account password)
+#   GCP_PROJECT_ID          - GCP project where the Cloud Run service lives
+#   GCP_REGION              - Region of the existing Cloud Run service (e.g. "us-central1")
+#   DOCKERHUB_USERNAME      - Docker Hub username or organisation name
+#   DOCKERHUB_TOKEN         - Docker Hub access token with permission to push
+#   CLOUD_RUN_SERVICE_NAME  - Cloud Run service name
+#   WIF_PROVIDER            - Workload Identity Federation provider resource name
+#   WIF_SERVICE_ACCOUNT     - Workload Identity Federation service account email
 #
-# Cloud Run:
-#   CLOUD_RUN_SERVICE_NAME — Cloud Run service name
-#   GCP_REGION             — GCP region (e.g., us-central1)
-#
-# Application Secrets (add each to the env_vars block below):
-#   JWT_SECRET             — Base64-encoded secret key for signing JWT tokens
-#   DATASOURCE_URL         — PostgreSQL connection URL
-#   DB_USERNAME            — Database username
-#   DB_PASSWORD            — Database password
-# ─────────────────────────────────────────────────────────────
+# App secrets (add as many as your application needs):
+#   JWT_SECRET              - Base64-encoded secret key for signing JWT tokens
+#   DATASOURCE_URL          - PostgreSQL connection URL
+#   DB_USERNAME             - Database username
+#   DB_PASSWORD             - Database password
 
 name: Build and Deploy to Cloud Run
 
 on:
-  pull_request:
-    branches:
-      - main
   push:
     branches:
       - main
+    paths:
+      - 'be/leetcode-tracker/**'
+      - '.github/workflows/deploy-cloud-run.yml'
+
+defaults:
+  run:
+    working-directory: be/leetcode-tracker
 
 env:
   GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
   IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/leetcode-tracker:${{ github.sha }}
-
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -49,17 +46,15 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: '21'
           cache: maven
 
-      - name: Test and package
-        run: ./mvnw --batch-mode verify
+      - name: Run tests
+        run: ./mvnw -B verify
 
   deploy:
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
@@ -75,18 +70,47 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push Docker image
+        id: push
         run: |
-          docker build \
-            -t ${{ env.IMAGE }} \
-            .
-          docker push \
-            ${{ env.IMAGE }}
+          set -euo pipefail
+          docker build --provenance=false -t "$IMAGE" .
+          docker push "$IMAGE" | tee push.log
+          digest=$(grep -oE 'sha256:[a-f0-9]{64}' push.log | tail -1)
+          [ -n "$digest" ] || { echo "Could not read the pushed image digest"; exit 1; }
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      # Cloud Run pulls Docker Hub images through the mirror.gcr.io cache and
+      # fails with "not found" while a freshly pushed image is not cached yet.
+      # Pull the manifest and every blob through the mirror until all of them
+      # are served, then deploy that exact digest.
+      - name: Wait for the image on mirror.gcr.io
+        env:
+          MIRROR: https://mirror.gcr.io/v2/${{ secrets.DOCKERHUB_USERNAME }}/leetcode-tracker
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -uo pipefail
+          accept='Accept: application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json'
+          for attempt in $(seq 1 40); do
+            ready=true
+            if curl -sf -H "$accept" -o manifest.json "$MIRROR/manifests/$DIGEST"; then
+              for blob in $(jq -r '.config.digest, .layers[].digest' manifest.json); do
+                code=$(curl -s -L -o /dev/null -w '%{http_code}' "$MIRROR/blobs/$blob")
+                [ "$code" = "200" ] || { ready=false; echo "attempt $attempt: blob ${blob:7:12} -> $code"; }
+              done
+            else
+              ready=false
+              echo "attempt $attempt: manifest not served yet"
+            fi
+            if $ready; then echo "Image is fully served by the mirror"; exit 0; fi
+            sleep 15
+          done
+          echo "The mirror did not serve the image within 10 minutes"
+          exit 1
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          token_format: access_token
+          project_id: ${{ env.GCP_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
@@ -94,9 +118,10 @@ jobs:
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ secrets.CLOUD_RUN_SERVICE_NAME }}
-          region: ${{ secrets.GCP_REGION }}
-          image: ${{ env.IMAGE }}
-          flags: --allow-unauthenticated --port=8080 --memory=768Mi
+          region: ${{ env.REGION }}
+          image: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/leetcode-tracker@${{ steps.push.outputs.digest }}
+          flags: --allow-unauthenticated --memory=768Mi
+          port: 8080
           env_vars: |
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             DATASOURCE_URL=${{ secrets.DATASOURCE_URL }}
